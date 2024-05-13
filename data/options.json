@@ -1,0 +1,9 @@
+{
+  "device": "/dev/ttyUSB0",
+  "additional_devices": "",
+  "configjson_device_replace": false,
+  "remote_access": true,
+  "remote_support_access": false,
+  "zbw_password": "razberry",
+  "log_level": 6
+}

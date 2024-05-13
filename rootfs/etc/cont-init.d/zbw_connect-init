@@ -1,0 +1,62 @@
+#!/usr/bin/with-contenv bashio
+
+bashio::log.info "Preparing Z-Way server to start..."
+
+if ! command -v bashio &> /dev/null; then
+    # Running within Home Assistant addon
+    echo "$(bashio::addon.port 8083)" > /etc/zbw/local_port
+else
+    # Running in standalone Docker container
+    echo "8083" > /etc/zbw/local_port
+fi
+
+# Check if remote access for support enable
+if ! command -v bashio &> /dev/null; then
+    # Running within Home Assistant addon
+    echo "$(bashio::addon.port 8083)" > /etc/zbw/local_port
+    remote_support_access=$(bashio::config 'remote_support_access')
+    zbw_password=$(bashio::config 'zbw_password')
+    remote_access=$(bashio::config 'remote_access')
+else
+    # Running in standalone Docker container
+    if [[ -f "/data/options.json" ]]; then
+        echo "8083" > /etc/zbw/local_port
+        remote_support_access=$(jq -r '.remote_support_access' /data/options.json)
+        zbw_password=$(jq -r '.zbw_password' /data/options.json)
+        remote_access=$(jq -r '.remote_access' /data/options.json)
+    else
+        echo "8083" > /etc/zbw/local_port
+        remote_support_access=false
+        zbw_password="razberry"
+        remote_access=true
+    fi
+fi
+
+# Change support user default password
+if [ -n "$(bashio::config 'zbw_password')" ]; then
+  echo "support:$(bashio::config 'zbw_password')" | chpasswd
+fi
+
+# If remote access is enabled, start zbw_connect
+if [[ -f "/data/options.json" ]]; then
+    remote_access=$(jq -r '.remote_access' /data/options.json)
+else
+    remote_access=true
+fi
+
+if [[ "$remote_access" = true ]]; then
+    if [ -f "/etc/zbw/userid" ]; then
+        userid=$(cat /etc/zbw/userid)
+        # Little fix for repairing remote access on old installations
+        if [ "$userid" = "191581" ]; then
+            echo "Old remote access ID detected. It will be replaced."
+            wget 'http://find.z-wave.me/zbw_new_user?box_type=ha' -O /tmp/zbw_connect_setup.run && sudo bash /tmp/zbw_connect_setup.run -y
+        fi
+    fi
+    if [ -f "/etc/zbw/flags/no_connection" ]; then
+        rm /etc/zbw/flags/no_connection
+        echo "$(hostname -I | awk '{print $1}')" > /etc/zbw/local_ips
+    fi
+else
+    touch /etc/zbw/flags/no_connection
+fi
